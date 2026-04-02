@@ -357,6 +357,53 @@ function AboutPage() {
   );
 }
 
+// ─── Standalone Attribution Pop-up (5s after page load) ─────────────
+function AttributionPopup() {
+  const [show, setShow] = useState(false);
+  const [answered, setAnswered] = useState(false);
+
+  useEffect(() => {
+    try { if (window.localStorage.getItem("axiom_src")) return; } catch(e) {}
+    const timer = setTimeout(() => setShow(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleSelect = (id) => {
+    setAnswered(true);
+    try { window.localStorage.setItem("axiom_src", id); } catch(e) {}
+    fetch("/api/attribution", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source: id, page: window.location.pathname, timestamp: new Date().toISOString() }) }).catch(() => {});
+    setTimeout(() => setShow(false), 1500);
+  };
+
+  if (!show) return null;
+  return (
+    <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 900, maxWidth: 320, width: "100%", animation: "fadeInUp 0.5s ease both" }}>
+      <div style={{ background: "linear-gradient(135deg,#0a0a18,#0f0f24)", border: "1px solid #1a1a3a", borderRadius: 16, padding: 22, boxShadow: "0 20px 60px -15px rgba(0,0,0,0.7)", position: "relative" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#6366f1,#8b5cf6,#6366f100)", borderRadius: "16px 16px 0 0" }} />
+        {!answered ? (<>
+          <button onClick={() => setShow(false)} style={{ position: "absolute", top: 10, right: 12, background: "none", border: "none", color: "#555570", fontSize: 16, cursor: "pointer", lineHeight: 1 }}>×</button>
+          <p style={{ fontSize: 13, fontWeight: 600, color: "#c0c0dd", marginBottom: 4 }}>Quick question</p>
+          <p style={{ fontSize: 12, color: "#7777aa", marginBottom: 14, lineHeight: 1.5 }}>How did you find AXIOM?</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {SOURCES.map((s) => (
+              <button key={s.id} onClick={() => handleSelect(s.id)} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 12px", borderRadius: 7, border: "1px solid #12122a", background: "#06060e", color: "#9999bb", fontSize: 12, fontWeight: 500, cursor: "pointer", textAlign: "left", transition: "all 0.2s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#6366f140"; e.currentTarget.style.background = "#6366f108"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#12122a"; e.currentTarget.style.background = "#06060e"; }}>
+                <span style={{ fontSize: 13, width: 20, textAlign: "center", flexShrink: 0 }}>{s.icon}</span>{s.label}
+              </button>
+            ))}
+          </div>
+        </>) : (
+          <div style={{ textAlign: "center", padding: "6px 0" }}>
+            <span style={{ fontSize: 20, color: "#22c55e" }}>✓</span>
+            <p style={{ fontSize: 12, color: "#7777aa", marginTop: 4 }}>Thanks! Enjoy exploring.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ═══ MAIN APP ════════════════════════════════════════════════════════
 export default function App() {
   const [page, setPage] = useState("home");
@@ -414,6 +461,7 @@ export default function App() {
       </footer>
 
       <EmailGate isOpen={emailGate.open} onClose={() => setEmailGate({ open: false, contract: "" })} contractName={emailGate.contract} />
+      <AttributionPopup />
     </div>
   );
 }
