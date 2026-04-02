@@ -4,7 +4,7 @@ const CONTRACTS_EXPLOITED = [
   { name: "GemPad Lock", type: "BLIND TEST", score: 19, coverage: "MEDIUM", coveragePct: 17.4, exploit: "Reentrancy", lostAmount: "$1.9M", severity: { critical: 1, high: 2, medium: 1, low: 1 }, oneLiner: "Reentrancy in lock creation and liquidity functions — external calls before state updates enable fund drainage", tag: "Real exploit",
     details: { tools: ["Slither", "Aderyn"], findings: 5, keyFinding: "External calls in lockTokens() execute before balance state is updated, allowing recursive re-entry to drain locked funds", trustAssumptions: ["Lock contract assumes token transfer has no callback", "No reentrancy guard on critical functions"], attackVector: "Attacker deploys malicious token with transfer hook → calls lockTokens() → hook re-enters before state update → drains locked liquidity" } },
   { name: "LeetSwap V2", type: "AMM / DEX", score: 0, coverage: "MEDIUM", coveragePct: 60.9, exploit: "Fee Manipulation", lostAmount: "$630K", severity: { critical: 2, high: 3, medium: 0, low: 0 }, oneLiner: "Zero-address constructor bricks pair permanently — fee-on-transfer tokens break AMM reserve accounting", tag: "Real exploit",
-    details: { tools: ["Slither", "Aderyn"], findings: 5, keyFinding: "Factory constructor allows zero-address fee recipient, permanently bricking pair contracts", trustAssumptions: ["Constructor parameters validated before deployment", "All tokens follow standard ERC-20 transfer semantics"], attackVector: "Deploy pair with zero-address fee recipient → pair becomes non-functional → combine with fee-on-transfer token to desync reserves → extract value" } },
+    details: { tools: ["Slither", "Aderyn"], findings: 5, keyFinding: "Factory constructor allows zero-address fee recipient, permanently bricking pair contracts", trustAssumptions: ["Constructor parameters validated before deployment", "All tokens follow standard ERC-20 transfer semantics"], attackVector: "Deploy pair with zero-address fee recipient → pair non-functional → fee-on-transfer token desyncs reserves → extract value" } },
   { name: "CloberDEX", type: "Order Book DEX", score: 60, coverage: "HIGH", coveragePct: 15.5, exploit: "Reentrancy", lostAmount: "$501K", severity: { critical: 0, high: 1, medium: 2, low: 2 }, oneLiner: "State updates after external transfers in mint() — checks-effects-interactions violation enables reserve manipulation", tag: "Real exploit",
     details: { tools: ["Slither", "Aderyn", "Mythril"], findings: 5, keyFinding: "mint() performs external token transfer before updating internal reserve state, violating CEI pattern", trustAssumptions: ["Token contracts in pools don't have callbacks", "Reserve state always consistent with balances"], attackVector: "Create pool with callback-enabled token → call mint() → callback during transfer → manipulate reserves → extract excess" } },
   { name: "SKI MASK DOG", type: "Meme Token", score: 0, coverage: "HIGH", coveragePct: 100, exploit: "Access Control", lostAmount: "Drainable", severity: { critical: 1, high: 1, medium: 0, low: 0 }, oneLiner: "Any user can drain all contract ETH via unprotected clearstuckEth() — no access control on fund transfer", tag: "Critical flaw",
@@ -17,55 +17,42 @@ const CONTRACTS_ECOSYSTEM = [
     details: { tools: ["Slither", "Aderyn", "Mythril"], findings: 3, keyFinding: "Minter role assigned to single address with no timelock, multisig, or supply cap", trustAssumptions: ["Minter controlled by trusted Aerodrome team", "Governance will transition to DAO", "Economic incentives prevent abuse"] } },
 ];
 
-// ─── PDF filename mapping ───────────────────────────────────────────
-const PDF_MAP = {
-  "GemPad Lock": "GemPad_Lock.pdf",
-  "LeetSwap V2": "LeetSwap_V2.pdf",
-  "CloberDEX": "CloberDEX.pdf",
-  "SKI MASK DOG": "SKI_MASK_DOG.pdf",
-  "tBTC": "tBTC.pdf",
-  "Aerodrome": "Aerodrome.pdf",
-};
+const PDF_MAP = { "GemPad Lock": "GemPad_Lock.pdf", "LeetSwap V2": "LeetSwap_V2.pdf", "CloberDEX": "CloberDEX.pdf", "SKI MASK DOG": "SKI_MASK_DOG.pdf", "tBTC": "tBTC.pdf", "Aerodrome": "Aerodrome.pdf" };
+
+const SOURCES = [
+  { id: "twitter", label: "Twitter / X", icon: "𝕏" },
+  { id: "reddit", label: "Reddit", icon: "◎" },
+  { id: "discord", label: "Discord", icon: "◈" },
+  { id: "google", label: "Google Search", icon: "◇" },
+  { id: "telegram", label: "Telegram", icon: "◆" },
+  { id: "email", label: "Email", icon: "✉" },
+  { id: "referral", label: "Friend / Referral", icon: "◉" },
+  { id: "other", label: "Other", icon: "…" },
+];
 
 // ─── DOM-based Counter ──────────────────────────────────────────────
 function Counter({ end, suffix = "", prefix = "" }) {
   const spanRef = useRef(null);
   useEffect(() => {
-    const el = spanRef.current;
-    if (!el) return;
+    const el = spanRef.current; if (!el) return;
     el.textContent = prefix + "0" + suffix;
-    let rafId;
-    const t0 = performance.now();
-    const run = (now) => {
-      const p = Math.min((now - t0) / 1500, 1);
-      el.textContent = prefix + Math.round((1 - Math.pow(1 - p, 3)) * end) + suffix;
-      if (p < 1) rafId = requestAnimationFrame(run);
-    };
+    let rafId; const t0 = performance.now();
+    const run = (now) => { const p = Math.min((now - t0) / 1500, 1); el.textContent = prefix + Math.round((1 - Math.pow(1 - p, 3)) * end) + suffix; if (p < 1) rafId = requestAnimationFrame(run); };
     rafId = requestAnimationFrame(run);
     return () => cancelAnimationFrame(rafId);
   }, [end, prefix, suffix]);
   return <span ref={spanRef} style={{ fontFamily: "var(--mono)", fontSize: 42, fontWeight: 800, lineHeight: 1 }} />;
 }
 
-// ─── DOM-based ScoreGauge ───────────────────────────────────────────
 function ScoreGauge({ score, size = 100 }) {
-  const numRef = useRef(null);
-  const circRef = useRef(null);
+  const numRef = useRef(null); const circRef = useRef(null);
   const gc = (s) => s >= 80 ? "#22c55e" : s >= 60 ? "#eab308" : s >= 40 ? "#f97316" : "#ef4444";
   const c = gc(score), r = (size - 12) / 2, ci = 2 * Math.PI * r * 0.75;
   useEffect(() => {
-    const numEl = numRef.current, circEl = circRef.current;
-    if (!numEl || !circEl) return;
-    numEl.textContent = "0"; circEl.style.strokeDashoffset = String(ci);
-    let rafId;
-    const t0 = performance.now();
-    const run = (now) => {
-      const p = Math.min((now - t0) / 1200, 1);
-      const v = Math.round((1 - Math.pow(1 - p, 3)) * score);
-      numEl.textContent = String(v);
-      circEl.style.strokeDashoffset = String(ci - (ci * v) / 100);
-      if (p < 1) rafId = requestAnimationFrame(run);
-    };
+    const n = numRef.current, cr = circRef.current; if (!n || !cr) return;
+    n.textContent = "0"; cr.style.strokeDashoffset = String(ci);
+    let rafId; const t0 = performance.now();
+    const run = (now) => { const p = Math.min((now - t0) / 1200, 1); const v = Math.round((1 - Math.pow(1 - p, 3)) * score); n.textContent = String(v); cr.style.strokeDashoffset = String(ci - (ci * v) / 100); if (p < 1) rafId = requestAnimationFrame(run); };
     rafId = requestAnimationFrame(run);
     return () => cancelAnimationFrame(rafId);
   }, [score, ci]);
@@ -92,9 +79,7 @@ function SeverityBadges({ severity }) {
 }
 
 function ContractCard({ contract, onRequestReport }) {
-  const [hov, setHov] = useState(false);
-  const [exp, setExp] = useState(false);
-  const isE = !!contract.exploit;
+  const [hov, setHov] = useState(false); const [exp, setExp] = useState(false); const isE = !!contract.exploit;
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ background: hov ? "linear-gradient(135deg,#0d0d1a,#111128)" : "linear-gradient(135deg,#0a0a14,#0d0d1f)", border: `1px solid ${hov ? "#2a2a4a" : "#16163a"}`, borderRadius: 16, overflow: "hidden", transition: "all 0.4s cubic-bezier(0.16,1,0.3,1)", transform: hov ? "translateY(-4px)" : "none", boxShadow: hov ? "0 20px 60px -15px rgba(0,0,0,0.6)" : "0 4px 20px -5px rgba(0,0,0,0.3)" }}>
       <div style={{ height: 2, background: contract.score >= 80 ? "linear-gradient(90deg,#22c55e,#22c55e00)" : contract.score >= 60 ? "linear-gradient(90deg,#eab308,#eab30800)" : "linear-gradient(90deg,#ef4444,#ef444400)" }} />
@@ -132,81 +117,120 @@ function SectionLabel({ children }) {
   return <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 700, letterSpacing: "0.2em", textTransform: "uppercase", color: "#6366f1", fontFamily: "var(--mono)", marginBottom: 16 }}><div style={{ width: 20, height: 1, background: "#6366f1" }} />{children}</div>;
 }
 
-// ─── Email Gate with Brevo Integration ──────────────────────────────
+// ─── Email Gate with Attribution + Brevo ─────────────────────────────
 function EmailGate({ isOpen, onClose, contractName }) {
+  const [step, setStep] = useState("source"); // source → form → loading → success
+  const [source, setSource] = useState("");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [status, setStatus] = useState("form"); // form | loading | success | error
   const [pdfUrl, setPdfUrl] = useState(null);
+
+  // Skip source step if already answered before
+  useEffect(() => {
+    if (isOpen) {
+      try {
+        const saved = window.localStorage.getItem("axiom_src");
+        if (saved) { setSource(saved); setStep("form"); }
+        else { setStep("source"); }
+      } catch(e) { setStep("source"); }
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
   const inp = { width: "100%", padding: "12px 16px", borderRadius: 10, border: "1px solid #1a1a3a", background: "#06060f", color: "#f0f0f5", fontSize: 14, outline: "none", fontFamily: "var(--font)", boxSizing: "border-box" };
 
+  const handleSource = (s) => {
+    setSource(s);
+    try { window.localStorage.setItem("axiom_src", s); } catch(e) {}
+    setStep("form");
+  };
+
   const handleSubmit = async () => {
     if (!name || !email) return;
-    setStatus("loading");
+    setStep("loading");
     try {
       const res = await fetch("/api/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, contractName }),
+        body: JSON.stringify({ name, email, contractName, source }),
       });
       const data = await res.json();
-      if (data.success && data.pdfUrl) {
-        setPdfUrl(data.pdfUrl);
-      } else {
-        // Fallback: direct PDF link from map
-        const file = PDF_MAP[contractName];
-        if (file) setPdfUrl(`/reports/${file}`);
-      }
-      setStatus("success");
-    } catch (err) {
-      // API failed — still show PDF (graceful degradation)
-      const file = PDF_MAP[contractName];
-      if (file) setPdfUrl(`/reports/${file}`);
-      setStatus("success");
+      if (data.pdfUrl) setPdfUrl(data.pdfUrl);
+      else { const f = PDF_MAP[contractName]; if (f) setPdfUrl(`/reports/${f}`); }
+    } catch(e) {
+      const f = PDF_MAP[contractName]; if (f) setPdfUrl(`/reports/${f}`);
     }
+    setStep("success");
   };
 
-  return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(135deg,#0a0a18,#0f0f24)", border: "1px solid #1a1a3a", borderRadius: 20, padding: 40, maxWidth: 440, width: "100%", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#6366f1,#8b5cf6,#6366f100)" }} />
+  const handleClose = () => { onClose(); setStep("source"); setName(""); setEmail(""); setPdfUrl(null); };
 
-        {status === "form" && (<>
+  return (
+    <div onClick={handleClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(135deg,#0a0a18,#0f0f24)", border: "1px solid #1a1a3a", borderRadius: 20, padding: "32px 36px", maxWidth: 420, width: "100%", position: "relative" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#6366f1,#8b5cf6,#6366f100)", borderRadius: "20px 20px 0 0" }} />
+        <button onClick={handleClose} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: "#555570", fontSize: 18, cursor: "pointer", lineHeight: 1 }}>×</button>
+
+        {/* Step indicator */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 20, justifyContent: "center" }}>
+          {["source","form","success"].map((s,i) => (
+            <div key={s} style={{ width: step === s || (s === "source" && step === "loading") ? 24 : 8, height: 4, borderRadius: 2, background: ["source","form","loading","success"].indexOf(step) >= i ? "#6366f1" : "#1a1a3a", transition: "all 0.3s" }} />
+          ))}
+        </div>
+
+        {/* STEP 1: Attribution */}
+        {step === "source" && (<>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", color: "#6366f1", textTransform: "uppercase", fontFamily: "var(--mono)" }}>Quick question</span>
+          <h2 style={{ margin: "6px 0 6px", fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>How did you find AXIOM?</h2>
+          <p style={{ margin: "0 0 18px", fontSize: 13, color: "#7777aa", lineHeight: 1.5 }}>This helps us improve. Pick one and you're on to the report.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {SOURCES.map((s) => (
+              <button key={s.id} onClick={() => handleSource(s.id)} style={{
+                display: "flex", alignItems: "center", gap: 10, width: "100%",
+                padding: "10px 14px", borderRadius: 8, border: "1px solid #12122a",
+                background: "#06060e", color: "#9999bb", fontSize: 13, fontWeight: 500,
+                cursor: "pointer", textAlign: "left", transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#6366f140"; e.currentTarget.style.background = "#6366f108"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#12122a"; e.currentTarget.style.background = "#06060e"; }}>
+                <span style={{ fontSize: 15, width: 22, textAlign: "center", flexShrink: 0 }}>{s.icon}</span>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </>)}
+
+        {/* STEP 2: Name + Email */}
+        {step === "form" && (<>
           <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", color: "#6366f1", textTransform: "uppercase", fontFamily: "var(--mono)" }}>AXIOM Intelligence</span>
-          <h2 style={{ margin: "8px 0", fontSize: 24, fontWeight: 700, color: "#f0f0f5" }}>Download Full Report</h2>
-          <p style={{ margin: "0 0 28px", fontSize: 14, color: "#7777aa", lineHeight: 1.6 }}>Complete risk intelligence for <strong style={{ color: "#c0c0dd" }}>{contractName}</strong> — findings, attack scenarios, trust assumptions, and SHA-256 verification.</p>
+          <h2 style={{ margin: "6px 0 6px", fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>Get the Full Report</h2>
+          <p style={{ margin: "0 0 22px", fontSize: 13, color: "#7777aa", lineHeight: 1.5 }}>Complete risk intelligence for <strong style={{ color: "#c0c0dd" }}>{contractName}</strong> — findings, attack scenarios, trust assumptions, SHA-256 hash.</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div><label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#7777aa", marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" style={inp} /></div>
             <div><label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#7777aa", marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" style={inp} /></div>
-            <button onClick={handleSubmit} disabled={!name || !email} style={{ marginTop: 6, padding: "14px 24px", borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", background: name && email ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#1a1a2e", color: name && email ? "#fff" : "#555" }}>Get Report →</button>
+            <button onClick={handleSubmit} disabled={!name || !email} style={{ marginTop: 4, padding: "13px 24px", borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", background: name && email ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#1a1a2e", color: name && email ? "#fff" : "#555" }}>Download Report →</button>
           </div>
-          <p style={{ margin: "20px 0 0", fontSize: 11, color: "#44445a", textAlign: "center" }}>No spam. Reports include SHA-256 hash.</p>
+          <p style={{ margin: "16px 0 0", fontSize: 11, color: "#44445a", textAlign: "center" }}>No spam. Reports include SHA-256 hash.</p>
         </>)}
 
-        {status === "loading" && (
-          <div style={{ textAlign: "center", padding: "40px 0" }}>
-            <div style={{ width: 40, height: 40, border: "3px solid #1a1a3a", borderTopColor: "#6366f1", borderRadius: "50%", margin: "0 auto 20px", animation: "spin 0.8s linear infinite" }} />
-            <p style={{ color: "#7777aa", fontSize: 14 }}>Preparing your report...</p>
+        {/* STEP: Loading */}
+        {step === "loading" && (
+          <div style={{ textAlign: "center", padding: "36px 0" }}>
+            <div style={{ width: 36, height: 36, border: "3px solid #1a1a3a", borderTopColor: "#6366f1", borderRadius: "50%", margin: "0 auto 16px", animation: "spin 0.8s linear infinite" }} />
+            <p style={{ color: "#7777aa", fontSize: 13 }}>Preparing your report...</p>
           </div>
         )}
 
-        {status === "success" && (
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", margin: "0 auto 20px", background: "#22c55e12", border: "2px solid #22c55e40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, color: "#22c55e" }}>✓</div>
-            <h2 style={{ margin: "0 0 12px", fontSize: 22, fontWeight: 700, color: "#22c55e" }}>Report Ready</h2>
-            <p style={{ margin: "0 0 20px", fontSize: 14, color: "#7777aa", lineHeight: 1.6 }}>Your {contractName} risk intelligence report is ready.</p>
-            {pdfUrl && (
-              <a href={pdfUrl} download style={{ display: "inline-block", padding: "14px 32px", borderRadius: 10, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 20px -5px #6366f160" }}>
-                Download PDF ↓
-              </a>
-            )}
-            <p style={{ margin: "16px 0 0", fontSize: 11, color: "#55556a" }}>SHA-256 verified · Professional risk intelligence report</p>
+        {/* STEP 3: Success + Download */}
+        {step === "success" && (
+          <div style={{ textAlign: "center", padding: "16px 0" }}>
+            <div style={{ width: 56, height: 56, borderRadius: "50%", margin: "0 auto 16px", background: "#22c55e12", border: "2px solid #22c55e40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, color: "#22c55e" }}>✓</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#22c55e" }}>Report Ready</h2>
+            <p style={{ margin: "0 0 18px", fontSize: 13, color: "#7777aa" }}>Your {contractName} risk intelligence report.</p>
+            {pdfUrl && <a href={pdfUrl} download style={{ display: "inline-block", padding: "12px 28px", borderRadius: 10, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 20px -5px #6366f160" }}>Download PDF ↓</a>}
+            <p style={{ margin: "14px 0 0", fontSize: 11, color: "#55556a" }}>SHA-256 verified · Professional risk intelligence</p>
           </div>
         )}
-
-        <button onClick={() => { onClose(); setStatus("form"); setName(""); setEmail(""); setPdfUrl(null); }} style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", color: "#555570", fontSize: 20, cursor: "pointer" }}>×</button>
       </div>
     </div>
   );
@@ -218,19 +242,16 @@ function PipelineStep({ num, title, desc, details, color = "#6366f1", last }) {
     <div style={{ display: "flex", gap: 24 }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0, width: 48 }}><div style={{ width: 48, height: 48, borderRadius: 12, background: `${color}12`, border: `1px solid ${color}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color, fontFamily: "var(--mono)" }}>{num}</div>{!last && <div style={{ width: 1, flex: 1, minHeight: 20, background: `linear-gradient(to bottom, ${color}30, ${color}08)` }} />}</div>
       <div style={{ flex: 1, paddingBottom: last ? 0 : 32 }}><h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: "#e0e0f0", lineHeight: "48px" }}>{title}</h3><p style={{ margin: "0 0 12px", fontSize: 14, lineHeight: 1.7, color: "#7777aa" }}>{desc}</p>
-        {details && (<><button onClick={() => setExp(!exp)} style={{ background: "none", border: "none", color, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, fontFamily: "var(--mono)" }}>{exp ? "− Hide details" : "+ Technical details"}</button>{exp && <div style={{ marginTop: 12, padding: 16, borderRadius: 10, background: "#06060e", border: "1px solid #12122a", fontSize: 12, lineHeight: 1.8, color: "#8888aa", fontFamily: "var(--code)" }}>{details}</div>}</>)}
+        {details && (<><button onClick={() => setExp(!exp)} style={{ background: "none", border: "none", color, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, fontFamily: "var(--mono)" }}>{exp ? "− Hide" : "+ Details"}</button>{exp && <div style={{ marginTop: 12, padding: 16, borderRadius: 10, background: "#06060e", border: "1px solid #12122a", fontSize: 12, lineHeight: 1.8, color: "#8888aa", fontFamily: "var(--code)" }}>{details}</div>}</>)}
       </div>
     </div>
   );
 }
 
 function HexGrid() { return <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", opacity: 0.03, pointerEvents: "none" }}><defs><pattern id="hx" width="56" height="100" patternUnits="userSpaceOnUse" patternTransform="scale(1.5)"><path d="M28 0L56 16.67V50L28 66.67L0 50V16.67Z M28 33.33L56 50V83.33L28 100L0 83.33V50Z" fill="none" stroke="#fff" strokeWidth="0.5" /></pattern></defs><rect width="100%" height="100%" fill="url(#hx)" /></svg>; }
+function Disclaimer() { return (<div style={{ padding: 28, borderRadius: 14, background: "#0a0a14", border: "1px solid #1a1a30" }}><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}><span style={{ fontSize: 14 }}>⚠</span><span style={{ fontSize: 11, fontWeight: 700, color: "#eab308", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "var(--mono)" }}>Important Disclaimer</span></div><p style={{ fontSize: 12, lineHeight: 1.8, color: "#66667a", margin: 0 }}>This report is an automated risk intelligence analysis combining static analysis tools and AI-powered code review. It detects known vulnerability patterns (reentrancy, access control, overflow, input validation) and evaluates trust assumptions. <strong style={{ color: "#8888aa" }}>LIMITATIONS:</strong> This analysis does NOT test economic design, business logic correctness, or protocol-specific invariants. This is not a substitute for a formal security audit by human experts.</p></div>); }
 
-function Disclaimer() {
-  return (<div style={{ padding: 28, borderRadius: 14, background: "#0a0a14", border: "1px solid #1a1a30" }}><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}><span style={{ fontSize: 14 }}>⚠</span><span style={{ fontSize: 11, fontWeight: 700, color: "#eab308", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "var(--mono)" }}>Important Disclaimer</span></div><p style={{ fontSize: 12, lineHeight: 1.8, color: "#66667a", margin: 0 }}>This report is an automated risk intelligence analysis combining static analysis tools and AI-powered code review. It detects known vulnerability patterns (reentrancy, access control, overflow, input validation) and evaluates trust assumptions. <strong style={{ color: "#8888aa" }}>LIMITATIONS:</strong> This analysis does NOT test economic design, business logic correctness, or protocol-specific invariants. Vulnerabilities arising from the interaction between multiple contracts or from economic incentive misalignment require fuzzing-based analysis or manual expert audit. This is not a substitute for a formal security audit by human experts.</p></div>);
-}
-
-// ═══ PAGES ═══════════════════════════════════════════════════════════
+// ═══ PAGES ═══
 function HomePage({ nav, openReport }) {
   return (<>
     <section style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "120px 40px 80px", overflow: "hidden" }}>
@@ -270,19 +291,18 @@ function HomePage({ nav, openReport }) {
 }
 
 function ReportsPage({ openReport }) {
-  const [tab, setTab] = useState("all");
-  const all = [...CONTRACTS_EXPLOITED, ...CONTRACTS_ECOSYSTEM];
+  const [tab, setTab] = useState("all"); const all = [...CONTRACTS_EXPLOITED, ...CONTRACTS_ECOSYSTEM];
   return (
     <section style={{ padding: "100px 40px 80px", maxWidth: 1100, margin: "0 auto" }}>
       <SectionLabel>Intelligence Portfolio</SectionLabel>
       <h2 style={{ fontSize: 40, fontWeight: 700, color: "#f0f0f5", marginBottom: 12 }}>Risk Intelligence Reports</h2>
-      <p style={{ fontSize: 16, color: "#7777aa", marginBottom: 16, maxWidth: 680, lineHeight: 1.7 }}>AXIOM correctly identified vulnerability patterns in 6 of 8 contracts later exploited for $2.55M+ in aggregate losses on Base chain, including 1 blind test on an unseen contract.</p>
+      <p style={{ fontSize: 16, color: "#7777aa", marginBottom: 16, maxWidth: 680, lineHeight: 1.7 }}>AXIOM correctly identified vulnerability patterns in 6 of 8 contracts later exploited for $2.55M+ in aggregate losses on Base chain.</p>
       <div style={{ display: "flex", gap: 8, marginBottom: 40, padding: 4, background: "#0a0a18", borderRadius: 12, border: "1px solid #12122a", width: "fit-content" }}>
         {[["all",`All (${all.length})`],["exploited",`Exploited (${CONTRACTS_EXPLOITED.length})`],["ecosystem",`Ecosystem (${CONTRACTS_ECOSYSTEM.length})`]].map(([id,lb]) => <button key={id} onClick={() => setTab(id)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", border: `1px solid ${tab===id?"#6366f130":"transparent"}`, background: tab===id?"#6366f118":"transparent", color: tab===id?"#a5a5ee":"#66667a" }}>{lb}</button>)}
       </div>
       {(tab==="all"||tab==="exploited") && (<>{tab==="all" && <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}><div style={{ width: 3, height: 24, background: "#ef4444", borderRadius: 2 }} /><div><h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>Validated Against Real-World Exploits</h3><p style={{ margin: "4px 0 0", fontSize: 13, color: "#66667a" }}>Detected before or independently of exploitation</p></div></div>}<div className="cards-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20, marginBottom: tab==="all"?60:0 }}>{CONTRACTS_EXPLOITED.map((c,i) => <ContractCard key={i} contract={c} onRequestReport={openReport} />)}</div></>)}
-      {(tab==="all"||tab==="ecosystem") && (<>{tab==="all" && <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}><div style={{ width: 3, height: 24, background: "#6366f1", borderRadius: 2 }} /><div><h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>Base Ecosystem Screening</h3><p style={{ margin: "4px 0 0", fontSize: 13, color: "#66667a" }}>High-value Base protocols and infrastructure</p></div></div>}<div className="cards-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20 }}>{CONTRACTS_ECOSYSTEM.map((c,i) => <ContractCard key={i} contract={c} onRequestReport={openReport} />)}</div></>)}
-      <div style={{ marginTop: 48, padding: 24, borderRadius: 14, background: "linear-gradient(135deg,#0a0a1a,#0d0d22)", border: "1px solid #16163a", display: "flex", gap: 16 }}><span style={{ fontSize: 20, flexShrink: 0, width: 40, height: 40, borderRadius: 10, background: "#22c55e10", border: "1px solid #22c55e20", display: "flex", alignItems: "center", justifyContent: "center" }}>✓</span><div><h4 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#c0c0dd" }}>Validation Methodology</h4><p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: "#7777aa" }}>Each report was generated by AXIOM's autonomous pipeline and compared against publicly documented exploit postmortems. The GemPad Lock analysis was a blind test. All portfolio reports use fixed outputs. Every PDF includes a SHA-256 hash.</p></div></div>
+      {(tab==="all"||tab==="ecosystem") && (<>{tab==="all" && <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}><div style={{ width: 3, height: 24, background: "#6366f1", borderRadius: 2 }} /><div><h3 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>Base Ecosystem Screening</h3></div></div>}<div className="cards-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 20 }}>{CONTRACTS_ECOSYSTEM.map((c,i) => <ContractCard key={i} contract={c} onRequestReport={openReport} />)}</div></>)}
+      <div style={{ marginTop: 48, padding: 24, borderRadius: 14, background: "linear-gradient(135deg,#0a0a1a,#0d0d22)", border: "1px solid #16163a", display: "flex", gap: 16 }}><span style={{ fontSize: 20, flexShrink: 0, width: 40, height: 40, borderRadius: 10, background: "#22c55e10", border: "1px solid #22c55e20", display: "flex", alignItems: "center", justifyContent: "center" }}>✓</span><div><h4 style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: "#c0c0dd" }}>Validation Methodology</h4><p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: "#7777aa" }}>Each report was generated by AXIOM's autonomous pipeline and compared against documented exploit postmortems. GemPad Lock was a blind test. All portfolio reports use fixed outputs. Every PDF includes a SHA-256 hash.</p></div></div>
       <div style={{ marginTop: 40 }}><Disclaimer /></div>
     </section>
   );
@@ -293,21 +313,19 @@ function MethodologyPage() {
     <section style={{ padding: "100px 40px 100px", maxWidth: 1100, margin: "0 auto" }}>
       <SectionLabel>How It Works</SectionLabel>
       <h2 style={{ fontSize: 40, fontWeight: 700, color: "#f0f0f5", marginBottom: 12 }}>Multi-Layer Analysis Pipeline</h2>
-      <p style={{ fontSize: 16, color: "#7777aa", marginBottom: 60, maxWidth: 680, lineHeight: 1.7 }}>AXIOM combines three independent static analysis tools with four specialized AI agents. Every step is automated.</p>
+      <p style={{ fontSize: 16, color: "#7777aa", marginBottom: 60, maxWidth: 680, lineHeight: 1.7 }}>Three independent static analysis tools + four specialized AI agents. Fully automated.</p>
       <div style={{ maxWidth: 800 }}>
-        <PipelineStep num="01" title="Source Acquisition" desc="Contract source fetched via BaseScan API. Proxy contracts auto-detected via EIP-1967." details={<span>• EIP-1967 proxy detection<br/>• Multi-file preservation<br/>• Smart truncation: 48K cap<br/>• Auto remappings for solc</span>} />
-        <PipelineStep num="02" title="Static Analysis — Three Tools" color="#22c55e" desc="Slither, Aderyn, and Mythril each analyze independently." details={<span><strong style={{color:"#aaa"}}>Slither v0.11.5</strong> — 101 detectors<br/><br/><strong style={{color:"#aaa"}}>Aderyn v0.6.8</strong> — 88 detectors<br/><br/><strong style={{color:"#aaa"}}>Mythril v0.24.8</strong> — Z3 symbolic execution</span>} />
-        <PipelineStep num="03" title="Coverage Confidence" color="#eab308" desc="Confidence assigned by tool compilation success. Affects Safety Score." details={<span><strong style={{color:"#22c55e"}}>HIGH</strong> — 2+ tools → 0pt<br/><strong style={{color:"#eab308"}}>MED</strong> — 1 tool → -5pt<br/><strong style={{color:"#ef4444"}}>LOW</strong> — 0 tools → -15pt</span>} />
-        <PipelineStep num="04" title="AI Multi-Agent Analysis" color="#8b5cf6" desc="Four AI agents with 18-category checklists, 12 few-shots, 10 trust patterns." details={<span>Agent 1: Severity Analyst<br/>Agent 2: Trust & Risk Mapper<br/>Agent 3: Code Reviewer<br/>Agent 4: Report Assembler</span>} />
-        <PipelineStep num="05" title="Safety Score (v2.2)" desc="Public formula. Same findings + coverage = same score. Always." />
-        <PipelineStep num="06" title="PDF Generation" color="#22c55e" last desc="Professional PDF with SHA-256 hash. 6-8 pages. axiom_pdf_generator.py v2.3." />
+        <PipelineStep num="01" title="Source Acquisition" desc="Contract source fetched via BaseScan API. Proxy auto-detected via EIP-1967." details={<span>• EIP-1967 proxy detection<br/>• Multi-file preservation<br/>• 48K char truncation<br/>• Auto solc remappings</span>} />
+        <PipelineStep num="02" title="Static Analysis — Three Tools" color="#22c55e" desc="Slither (101 detectors), Aderyn (88 detectors), Mythril (Z3 symbolic execution)." />
+        <PipelineStep num="03" title="Coverage Confidence" color="#eab308" desc="HIGH (2+ tools) → 0pt penalty. MEDIUM (1) → -5pt. LOW (0) → -15pt." />
+        <PipelineStep num="04" title="AI Multi-Agent Analysis" color="#8b5cf6" desc="Four agents with 18-category checklists, 12 few-shots, 10 trust patterns." />
+        <PipelineStep num="05" title="Safety Score (v2.2)" desc="Public formula. Deterministic. Reproducible." />
+        <PipelineStep num="06" title="PDF Generation" color="#22c55e" last desc="Professional PDF with SHA-256 hash. 6-8 pages." />
       </div>
       <div style={{ marginTop: 60, padding: 32, borderRadius: 16, background: "linear-gradient(135deg,#0a0a1a,#0f0f28)", border: "1px solid #16163a" }}>
         <h3 style={{ fontSize: 18, fontWeight: 700, color: "#e0e0f0", marginBottom: 16 }}>Safety Score v2.2</h3>
         <pre style={{ fontFamily: "var(--mono)", fontSize: 13, lineHeight: 2, color: "#8b8bbb", overflow: "auto", padding: 20, background: "#06060e", borderRadius: 10, border: "1px solid #12122a" }}>{`  Score = 100 - Σ(severity × weight) - coverage_penalty
-
-  CRITICAL × 25    HIGH × 15    MEDIUM × 8    LOW × 3    INFO × 1
-  Coverage:  HIGH → 0    MED → -5    LOW → -15`}</pre>
+  CRITICAL × 25    HIGH × 15    MEDIUM × 8    LOW × 3    INFO × 1`}</pre>
       </div>
       <div style={{ marginTop: 40 }}><Disclaimer /></div>
     </section>
@@ -319,9 +337,9 @@ function AboutPage() {
     <section style={{ padding: "100px 40px 80px", maxWidth: 1100, margin: "0 auto" }}>
       <SectionLabel>About AXIOM</SectionLabel>
       <h2 style={{ fontSize: 40, fontWeight: 700, color: "#f0f0f5", marginBottom: 12 }}>Risk Intelligence, Not Auditing</h2>
-      <p style={{ fontSize: 16, color: "#7777aa", marginBottom: 60, maxWidth: 720, lineHeight: 1.7 }}>AXIOM is an autonomous smart contract risk intelligence platform for fast due diligence on Base chain.</p>
+      <p style={{ fontSize: 16, color: "#7777aa", marginBottom: 60, maxWidth: 720, lineHeight: 1.7 }}>Autonomous smart contract risk intelligence for fast due diligence on Base chain.</p>
       <div className="about-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 60 }}>
-        <div style={{ padding: 28, borderRadius: 16, background: "linear-gradient(135deg,#22c55e06,#22c55e02)", border: "1px solid #22c55e18" }}><div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", color: "#22c55e", marginBottom: 16, fontFamily: "var(--mono)" }}>WHAT AXIOM IS</div>{["Instant risk screening","Multi-tool analysis (3 tools)","AI code review with knowledge injection","Trust assumption mapping","Attack scenarios from findings","SHA-256 verified PDF","Pre-audit triage for anyone in DeFi"].map((x,i) => <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10, fontSize: 13, color: "#9999bb", lineHeight: 1.6 }}><span style={{ color: "#22c55e", flexShrink: 0 }}>+</span>{x}</div>)}</div>
+        <div style={{ padding: 28, borderRadius: 16, background: "linear-gradient(135deg,#22c55e06,#22c55e02)", border: "1px solid #22c55e18" }}><div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", color: "#22c55e", marginBottom: 16, fontFamily: "var(--mono)" }}>WHAT AXIOM IS</div>{["Instant risk screening","Multi-tool analysis (3 tools)","AI code review + knowledge injection","Trust assumption mapping","Attack scenarios from findings","SHA-256 verified PDF","Pre-audit triage for anyone in DeFi"].map((x,i) => <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10, fontSize: 13, color: "#9999bb", lineHeight: 1.6 }}><span style={{ color: "#22c55e", flexShrink: 0 }}>+</span>{x}</div>)}</div>
         <div style={{ padding: 28, borderRadius: 16, background: "linear-gradient(135deg,#ef444406,#ef444402)", border: "1px solid #ef444418" }}><div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", color: "#ef4444", marginBottom: 16, fontFamily: "var(--mono)" }}>WHAT AXIOM IS NOT</div>{["Not a formal security audit","Not a substitute for human review","Not economic/tokenomics analysis","Not business logic verification","Not multi-contract testing","Not a safety guarantee","Not fuzzing (QuickScan tier)"].map((x,i) => <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10, fontSize: 13, color: "#9999bb", lineHeight: 1.6 }}><span style={{ color: "#ef4444", flexShrink: 0 }}>−</span>{x}</div>)}</div>
       </div>
       <h3 style={{ fontSize: 24, fontWeight: 700, color: "#e0e0f0", marginBottom: 32 }}>Where AXIOM Fits</h3>
@@ -332,84 +350,10 @@ function AboutPage() {
       <h3 style={{ fontSize: 24, fontWeight: 700, color: "#e0e0f0", marginBottom: 32 }}>Products</h3>
       <div className="about-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 60 }}>
         <div style={{ padding: 32, borderRadius: 16, background: "linear-gradient(135deg,#0a0a1a,#0f0f28)", border: "1px solid #6366f130", position: "relative" }}><div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#6366f1,#6366f100)" }} /><div style={{ fontSize: 32, fontWeight: 800, color: "#6366f1", fontFamily: "var(--mono)" }}>$10</div><h4 style={{ margin: "6px 0", fontSize: 20, fontWeight: 700, color: "#e0e0f0" }}>QuickScan</h4><p style={{ fontSize: 13, color: "#eab308", fontWeight: 600, marginBottom: 16, fontFamily: "var(--mono)" }}>Fast risk triage</p>{["3-tool static analysis","4 AI agents","Trust Assumptions","Attack Scenarios","Safety Score v2.2","SHA-256 PDF"].map((f,i) => <div key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: "#8888aa", marginBottom: 6 }}><span style={{ color: "#6366f1", fontSize: 10 }}>◆</span>{f}</div>)}</div>
-        <div style={{ padding: 32, borderRadius: 16, background: "linear-gradient(135deg,#0a0a1a,#0f0f28)", border: "1px solid #ffffff10", position: "relative", opacity: 0.6 }}><div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#8b5cf6,#8b5cf600)" }} /><div style={{ position: "absolute", top: 16, right: 16, padding: "4px 10px", borderRadius: 6, background: "#ffffff08", border: "1px solid #ffffff10", fontSize: 10, fontWeight: 700, color: "#8888aa", letterSpacing: "0.1em", fontFamily: "var(--mono)" }}>COMING SOON</div><div style={{ fontSize: 32, fontWeight: 800, color: "#8b5cf6", fontFamily: "var(--mono)" }}>$150</div><h4 style={{ margin: "6px 0", fontSize: 20, fontWeight: 700, color: "#e0e0f0" }}>Deep Report</h4><p style={{ fontSize: 13, color: "#eab308", fontWeight: 600, marginBottom: 16, fontFamily: "var(--mono)" }}>Institutional-grade</p>{["Everything in QuickScan","Fuzzing","Multi-LLM consensus","Executive Summary","Technical layer","Continuous rescan"].map((f,i) => <div key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: "#8888aa", marginBottom: 6 }}><span style={{ color: "#8b5cf6", fontSize: 10 }}>◆</span>{f}</div>)}</div>
+        <div style={{ padding: 32, borderRadius: 16, background: "linear-gradient(135deg,#0a0a1a,#0f0f28)", border: "1px solid #ffffff10", position: "relative", opacity: 0.6 }}><div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#8b5cf6,#8b5cf600)" }} /><div style={{ position: "absolute", top: 16, right: 16, padding: "4px 10px", borderRadius: 6, background: "#ffffff08", fontSize: 10, fontWeight: 700, color: "#8888aa", letterSpacing: "0.1em", fontFamily: "var(--mono)" }}>COMING SOON</div><div style={{ fontSize: 32, fontWeight: 800, color: "#8b5cf6", fontFamily: "var(--mono)" }}>$150</div><h4 style={{ margin: "6px 0", fontSize: 20, fontWeight: 700, color: "#e0e0f0" }}>Deep Report</h4><p style={{ fontSize: 13, color: "#eab308", fontWeight: 600, marginBottom: 16, fontFamily: "var(--mono)" }}>Institutional-grade</p>{["Everything in QuickScan","Fuzzing","Multi-LLM consensus","Executive Summary","Technical layer","Continuous rescan"].map((f,i) => <div key={i} style={{ display: "flex", gap: 8, fontSize: 12, color: "#8888aa", marginBottom: 6 }}><span style={{ color: "#8b5cf6", fontSize: 10 }}>◆</span>{f}</div>)}</div>
       </div>
       <Disclaimer />
     </section>
-  );
-}
-
-// ─── Attribution Pop-up ─────────────────────────────────────────────
-function AttributionPopup() {
-  const [show, setShow] = useState(false);
-  const [answered, setAnswered] = useState(false);
-
-  useEffect(() => {
-    try {
-      if (window.localStorage.getItem("axiom_attr")) return;
-    } catch(e) {}
-    const timer = setTimeout(() => setShow(true), 5000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleSelect = async (source) => {
-    setAnswered(true);
-    try { window.localStorage.setItem("axiom_attr", source); } catch(e) {}
-    try {
-      await fetch("/api/attribution", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, page: window.location.pathname, timestamp: new Date().toISOString() }),
-      });
-    } catch(e) {}
-    setTimeout(() => setShow(false), 1500);
-  };
-
-  if (!show) return null;
-
-  const sources = [
-    { id: "twitter", label: "Twitter / X", icon: "𝕏" },
-    { id: "reddit", label: "Reddit", icon: "◎" },
-    { id: "discord", label: "Discord", icon: "◈" },
-    { id: "google", label: "Google Search", icon: "◇" },
-    { id: "telegram", label: "Telegram", icon: "◆" },
-    { id: "referral", label: "Friend / Referral", icon: "◉" },
-    { id: "other", label: "Other", icon: "…" },
-  ];
-
-  return (
-    <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 900, maxWidth: 340, width: "100%", animation: "fadeInUp 0.5s ease both" }}>
-      <div style={{ background: "linear-gradient(135deg,#0a0a18,#0f0f24)", border: "1px solid #1a1a3a", borderRadius: 16, padding: 24, boxShadow: "0 20px 60px -15px rgba(0,0,0,0.7)", position: "relative" }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#6366f1,#8b5cf6,#6366f100)", borderRadius: "16px 16px 0 0" }} />
-
-        {!answered ? (<>
-          <button onClick={() => setShow(false)} style={{ position: "absolute", top: 12, right: 12, background: "none", border: "none", color: "#555570", fontSize: 16, cursor: "pointer", lineHeight: 1 }}>×</button>
-          <p style={{ fontSize: 13, fontWeight: 600, color: "#c0c0dd", marginBottom: 4 }}>Quick question</p>
-          <p style={{ fontSize: 12, color: "#7777aa", marginBottom: 16, lineHeight: 1.5 }}>How did you find AXIOM? This helps us improve.</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {sources.map((s) => (
-              <button key={s.id} onClick={() => handleSelect(s.id)} style={{
-                display: "flex", alignItems: "center", gap: 10, width: "100%",
-                padding: "9px 14px", borderRadius: 8, border: "1px solid #12122a",
-                background: "#06060e", color: "#9999bb", fontSize: 12, fontWeight: 500,
-                cursor: "pointer", textAlign: "left", transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => { e.target.style.borderColor = "#6366f140"; e.target.style.background = "#6366f108"; }}
-              onMouseLeave={(e) => { e.target.style.borderColor = "#12122a"; e.target.style.background = "#06060e"; }}
-              >
-                <span style={{ fontSize: 14, width: 20, textAlign: "center", flexShrink: 0 }}>{s.icon}</span>
-                {s.label}
-              </button>
-            ))}
-          </div>
-        </>) : (
-          <div style={{ textAlign: "center", padding: "8px 0" }}>
-            <span style={{ fontSize: 20, color: "#22c55e" }}>✓</span>
-            <p style={{ fontSize: 12, color: "#7777aa", marginTop: 6 }}>Thanks! Enjoy exploring.</p>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -445,7 +389,7 @@ export default function App() {
         .fi{animation:fadeInUp .8s ease both}.fi1{animation-delay:.1s}.fi2{animation-delay:.2s}.fi3{animation-delay:.3s}.fi4{animation-delay:.4s}
         ::selection{background:#6366f140;color:#fff}
         ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#06060e}::-webkit-scrollbar-thumb{background:#1a1a3a;border-radius:3px}
-        @media(max-width:768px){.hero-title{font-size:34px!important}.stats-grid{grid-template-columns:1fr 1fr!important}.cards-grid{grid-template-columns:1fr!important}.nav-links-d{display:none!important}.about-grid,.diff-grid{grid-template-columns:1fr!important}}
+        @media(max-width:768px){.hero-title{font-size:34px!important}.stats-grid{grid-template-columns:1fr 1fr!important}.cards-grid{grid-template-columns:1fr!important}.nav-links-d{display:none!important}.about-grid{grid-template-columns:1fr!important}}
       `}</style>
 
       <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "1px", background: "linear-gradient(90deg,transparent,#6366f140,transparent)", animation: "scanLine 8s linear infinite", zIndex: 0, pointerEvents: "none", opacity: 0.5 }} />
@@ -470,7 +414,6 @@ export default function App() {
       </footer>
 
       <EmailGate isOpen={emailGate.open} onClose={() => setEmailGate({ open: false, contract: "" })} contractName={emailGate.contract} />
-      <AttributionPopup />
     </div>
   );
 }
