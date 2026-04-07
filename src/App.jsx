@@ -30,6 +30,17 @@ const SOURCES = [
   { id: "other", label: "Other", icon: "…" },
 ];
 
+// ─── PAYMENT CONFIG (Kairo: preencher com dados reais) ──────────────
+const PAYMENT_CONFIG = {
+  price: 10,
+  currency: "USD",
+  email: "financial@kairovftechenology.site",
+ paypal: "https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=kairo_2011@hotmail.com&amount=10&currency_code=USD&item_name=AXIOM+QuickScan",
+  pix: { key: "kairo_2011@hotmail.com", name: "Kairo V.F.", type: "Email" }, // TODO: Kairo preencher
+  crypto: { address: "0xc9831d657146Da635798678C05dB729595F3392E   ", network: "Base (Ethereum L2)", tokens: "USDC / ETH" }, // TODO: Kairo preencher
+  stripe: "https://buy.stripe.com/test_3cI14m5gV1ss7qoemu7EQ00", // TODO: Kairo preencher (criar em stripe.com/payment-links)
+};
+
 // ─── DOM-based Counter ──────────────────────────────────────────────
 function Counter({ end, suffix = "", prefix = "" }) {
   const spanRef = useRef(null);
@@ -252,7 +263,7 @@ function HexGrid() { return <svg style={{ position: "absolute", top: 0, left: 0,
 function Disclaimer() { return (<div style={{ padding: 28, borderRadius: 14, background: "#0a0a14", border: "1px solid #1a1a30" }}><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}><span style={{ fontSize: 14 }}>⚠</span><span style={{ fontSize: 11, fontWeight: 700, color: "#eab308", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "var(--mono)" }}>Important Disclaimer</span></div><p style={{ fontSize: 12, lineHeight: 1.8, color: "#66667a", margin: 0 }}>This report is an automated risk intelligence analysis combining static analysis tools and AI-powered code review. It detects known vulnerability patterns (reentrancy, access control, overflow, input validation) and evaluates trust assumptions. <strong style={{ color: "#8888aa" }}>LIMITATIONS:</strong> This analysis does NOT test economic design, business logic correctness, or protocol-specific invariants. This is not a substitute for a formal security audit by human experts.</p></div>); }
 
 // ═══ PAGES ═══
-function HomePage({ nav, openReport }) {
+function HomePage({ nav, openReport, openOrder }) {
   return (<>
     <section style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "120px 40px 80px", overflow: "hidden" }}>
       <HexGrid />
@@ -283,7 +294,7 @@ function HomePage({ nav, openReport }) {
       <SectionLabel>Get Started</SectionLabel>
       <h2 style={{ fontSize: 40, fontWeight: 700, color: "#f0f0f5", marginBottom: 20 }}>Stop Trusting. Start Verifying.</h2>
       <p style={{ fontSize: 16, color: "#7777aa", lineHeight: 1.7, maxWidth: 560, margin: "0 auto 40px" }}>Submit a contract address and receive comprehensive risk intelligence — multi-tool analysis, AI review, trust assumptions, attack scenarios, and Safety Score — as a professional PDF.</p>
-      <a href="mailto:financial@kairovftechenology.site?subject=QuickScan Request" style={{ display: "inline-block", padding: "16px 40px", borderRadius: 12, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontSize: 16, fontWeight: 700, textDecoration: "none", boxShadow: "0 8px 30px -5px #6366f160" }}>Request a QuickScan — $10</a>
+      <button onClick={openOrder} style={{ display: "inline-block", padding: "16px 40px", borderRadius: 12, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontSize: 16, fontWeight: 700, border: "none", cursor: "pointer", boxShadow: "0 8px 30px -5px #6366f160" }}>Request a QuickScan — $10</button>
       <p style={{ marginTop: 14, fontSize: 12, color: "#55556a" }}>Multi-tool analysis + AI review · PDF report · Delivered in minutes</p>
     </section>
     <section style={{ padding: "0 40px 60px", maxWidth: 1100, margin: "0 auto" }}><Disclaimer /></section>
@@ -404,11 +415,247 @@ function AttributionPopup() {
   );
 }
 
+// ─── Order Modal (QuickScan $10 — 4 payment methods) ────────────────
+function OrderModal({ isOpen, onClose }) {
+  const [step, setStep] = useState("info"); // info → method → details → confirm
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [contractAddr, setContractAddr] = useState("");
+  const [method, setMethod] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  const reset = () => { setStep("info"); setName(""); setEmail(""); setContractAddr(""); setMethod(null); setCopied(false); };
+  const handleClose = () => { onClose(); setTimeout(reset, 300); };
+
+  const copyText = (text) => {
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+  };
+
+  const submitLead = async () => {
+    try {
+      await fetch("/api/subscribe", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, contractName: `QuickScan: ${contractAddr}`, source: "quickscan_order" }),
+      });
+    } catch(e) {}
+  };
+
+  const handleProceed = () => {
+    if (!name || !email || !contractAddr) return;
+    submitLead();
+    setStep("method");
+  };
+
+  const handleMethodSelect = (m) => {
+    setMethod(m);
+    setStep("details");
+  };
+
+  const handlePaymentDone = () => {
+    // Send confirmation email intent
+    const subject = encodeURIComponent(`QuickScan Order — ${contractAddr}`);
+    const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\nContract: ${contractAddr}\nPayment: ${method}\n\nPlease confirm payment receipt and deliver the report.`);
+    // Also try to notify via API
+    fetch("/api/subscribe", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, contractName: `PAID-${method}: ${contractAddr}`, source: `payment_${method}` }),
+    }).catch(() => {});
+    setStep("confirm");
+  };
+
+  if (!isOpen) return null;
+
+  const inp = { width: "100%", padding: "12px 16px", borderRadius: 10, border: "1px solid #1a1a3a", background: "#06060f", color: "#f0f0f5", fontSize: 14, outline: "none", fontFamily: "var(--font)", boxSizing: "border-box" };
+  const stepNames = ["info","method","details","confirm"];
+  const stepIdx = stepNames.indexOf(step);
+
+  const methods = [
+    { id: "card", icon: "💳", name: "Credit Card", desc: "Visa, Mastercard, Amex", color: "#6366f1" },
+    { id: "pix", icon: "⚡", name: "Pix", desc: "Instant • Brazil", color: "#22c55e" },
+    { id: "paypal", icon: "🅿", name: "PayPal", desc: "Pay securely", color: "#0070ba" },
+    { id: "crypto", icon: "◈", name: "Crypto", desc: "USDC / ETH on Base", color: "#f59e0b" },
+  ];
+
+  return (
+    <div onClick={handleClose} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.88)", backdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "linear-gradient(145deg,#0a0a18,#0e0e24)", border: "1px solid #1a1a3a", borderRadius: 20, padding: "32px 36px", maxWidth: 480, width: "100%", position: "relative", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg,#6366f1,#8b5cf6,#22c55e,transparent)", borderRadius: "20px 20px 0 0" }} />
+        <button onClick={handleClose} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: "#555570", fontSize: 18, cursor: "pointer", lineHeight: 1, zIndex: 2 }}>×</button>
+
+        {/* Progress bar */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 24 }}>
+          {stepNames.map((s,i) => (
+            <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= stepIdx ? "#6366f1" : "#1a1a3a", transition: "all 0.4s" }} />
+          ))}
+        </div>
+
+        {/* ──── STEP 1: Contract Info ──── */}
+        {step === "info" && (<>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "#6366f112", border: "1px solid #6366f130", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 28 32"><path d="M14 0L27.5 8V24L14 32L0.5 24V8Z" fill="none" stroke="#6366f1" strokeWidth="2" /><text x="14" y="19" textAnchor="middle" fill="#6366f1" fontSize="12" fontWeight="800" fontFamily="'JetBrains Mono'">A</text></svg>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.15em", color: "#6366f1", textTransform: "uppercase", fontFamily: "var(--mono)" }}>QuickScan Order</span>
+          </div>
+          <h2 style={{ margin: "10px 0 6px", fontSize: 22, fontWeight: 700, color: "#f0f0f5" }}>Request a QuickScan</h2>
+          <p style={{ margin: "0 0 24px", fontSize: 13, color: "#7777aa", lineHeight: 1.6 }}>3-tool static analysis + 4 AI agents + Trust Assumptions + Attack Scenarios + Safety Score — delivered as a professional PDF.</p>
+
+          <div style={{ padding: "12px 16px", borderRadius: 10, background: "#6366f108", border: "1px solid #6366f118", marginBottom: 22, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13, color: "#8b8bbb" }}>QuickScan Report</span>
+            <span style={{ fontSize: 22, fontWeight: 800, color: "#6366f1", fontFamily: "var(--mono)" }}>$10</span>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#7777aa", marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>Contract Address *</label>
+              <input type="text" value={contractAddr} onChange={e => setContractAddr(e.target.value)} placeholder="0x... (Base chain)" style={{ ...inp, fontFamily: "var(--mono)", fontSize: 13 }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#7777aa", marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>Name *</label>
+                <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" style={inp} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#7777aa", marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase" }}>Email *</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com" style={inp} />
+              </div>
+            </div>
+            <button onClick={handleProceed} disabled={!name || !email || !contractAddr} style={{ marginTop: 6, padding: "14px 24px", borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: name && email && contractAddr ? "pointer" : "default", background: name && email && contractAddr ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#1a1a2e", color: name && email && contractAddr ? "#fff" : "#555", transition: "all 0.3s" }}>
+              Choose Payment Method →
+            </button>
+          </div>
+          <p style={{ margin: "16px 0 0", fontSize: 11, color: "#44445a", textAlign: "center" }}>Report delivered to your email within minutes after payment confirmation.</p>
+        </>)}
+
+        {/* ──── STEP 2: Payment Method ──── */}
+        {step === "method" && (<>
+          <button onClick={() => setStep("info")} style={{ background: "none", border: "none", color: "#6366f1", fontSize: 12, cursor: "pointer", fontWeight: 600, marginBottom: 12, padding: 0, fontFamily: "var(--mono)" }}>← Back</button>
+          <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>Choose Payment</h2>
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: "#7777aa" }}>
+            Contract: <span style={{ color: "#8b8bbb", fontFamily: "var(--mono)", fontSize: 11 }}>{contractAddr.slice(0,8)}...{contractAddr.slice(-4)}</span>
+          </p>
+          <div style={{ padding: "8px 12px", borderRadius: 8, background: "#6366f108", border: "1px solid #6366f118", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#7777aa" }}>Total</span>
+            <span style={{ fontSize: 18, fontWeight: 800, color: "#6366f1", fontFamily: "var(--mono)" }}>$10.00</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {methods.map(m => (
+              <button key={m.id} onClick={() => handleMethodSelect(m.id)} style={{
+                padding: "20px 16px", borderRadius: 14, border: "1px solid #16163a", background: "#06060e",
+                cursor: "pointer", textAlign: "center", transition: "all 0.3s", display: "flex", flexDirection: "column", alignItems: "center", gap: 8
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = `${m.color}50`; e.currentTarget.style.background = `${m.color}08`; e.currentTarget.style.transform = "translateY(-2px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "#16163a"; e.currentTarget.style.background = "#06060e"; e.currentTarget.style.transform = "none"; }}>
+                <span style={{ fontSize: 24 }}>{m.icon}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#e0e0f0" }}>{m.name}</span>
+                <span style={{ fontSize: 11, color: "#66667a" }}>{m.desc}</span>
+              </button>
+            ))}
+          </div>
+        </>)}
+
+        {/* ──── STEP 3: Payment Details ──── */}
+        {step === "details" && (<>
+          <button onClick={() => setStep("method")} style={{ background: "none", border: "none", color: "#6366f1", fontSize: 12, cursor: "pointer", fontWeight: 600, marginBottom: 12, padding: 0, fontFamily: "var(--mono)" }}>← Change method</button>
+
+          {method === "card" && (<>
+            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>💳 Credit Card</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#7777aa", lineHeight: 1.6 }}>You'll be redirected to our secure payment page (Stripe). After payment, your report will be delivered to <strong style={{ color: "#c0c0dd" }}>{email}</strong>.</p>
+            <a href={`${PAYMENT_CONFIG.stripe}?prefilled_email=${encodeURIComponent(email)}&client_reference_id=${encodeURIComponent(contractAddr)}`} target="_blank" rel="noopener noreferrer" onClick={handlePaymentDone}
+              style={{ display: "block", textAlign: "center", padding: "14px 24px", borderRadius: 10, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 20px -5px #6366f160" }}>
+              Pay $10 with Card →
+            </a>
+            <p style={{ margin: "12px 0 0", fontSize: 11, color: "#44445a", textAlign: "center" }}>Powered by Stripe · Secure checkout</p>
+          </>)}
+
+          {method === "pix" && (<>
+            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>⚡ Pix</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#7777aa", lineHeight: 1.6 }}>Transfer <strong style={{ color: "#22c55e" }}>R$55,00</strong> (≈ $10 USD) using the Pix key below. After payment, click "I've Paid" — we'll verify and deliver your report.</p>
+            <div style={{ padding: 20, borderRadius: 14, background: "#06060e", border: "1px solid #22c55e20", marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "#22c55e", textTransform: "uppercase", fontFamily: "var(--mono)", marginBottom: 10 }}>Pix Key ({PAYMENT_CONFIG.pix.type})</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <code style={{ flex: 1, padding: "10px 14px", borderRadius: 8, background: "#0a0a16", border: "1px solid #1a1a3a", color: "#c0c0dd", fontSize: 13, fontFamily: "var(--mono)", wordBreak: "break-all" }}>{PAYMENT_CONFIG.pix.key}</code>
+                <button onClick={() => copyText(PAYMENT_CONFIG.pix.key)} style={{ padding: "10px 16px", borderRadius: 8, background: copied ? "#22c55e20" : "#ffffff08", border: `1px solid ${copied ? "#22c55e40" : "#ffffff15"}`, color: copied ? "#22c55e" : "#8888aa", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0, transition: "all 0.2s" }}>
+                  {copied ? "✓ Copied" : "Copy"}
+                </button>
+              </div>
+              <div style={{ marginTop: 10, fontSize: 12, color: "#55556a" }}>Recipient: <span style={{ color: "#7777aa" }}>{PAYMENT_CONFIG.pix.name}</span></div>
+              <div style={{ marginTop: 4, fontSize: 12, color: "#55556a" }}>Amount: <span style={{ color: "#22c55e", fontWeight: 700, fontFamily: "var(--mono)" }}>R$ 55,00</span></div>
+            </div>
+            <button onClick={handlePaymentDone} style={{ width: "100%", padding: "14px 24px", borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", background: "linear-gradient(135deg,#22c55e,#16a34a)", color: "#fff" }}>
+              I've Paid ✓
+            </button>
+            <p style={{ margin: "12px 0 0", fontSize: 11, color: "#44445a", textAlign: "center" }}>We'll verify payment and deliver within 30 minutes.</p>
+          </>)}
+
+          {method === "paypal" && (<>
+            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>🅿 PayPal</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#7777aa", lineHeight: 1.6 }}>You'll be redirected to PayPal to complete the $10 payment. After payment, your report will be delivered to <strong style={{ color: "#c0c0dd" }}>{email}</strong>.</p>
+            <a href={PAYMENT_CONFIG.paypal} target="_blank" rel="noopener noreferrer" onClick={handlePaymentDone}
+              style={{ display: "block", textAlign: "center", padding: "14px 24px", borderRadius: 10, background: "linear-gradient(135deg,#0070ba,#003087)", color: "#fff", fontSize: 14, fontWeight: 700, textDecoration: "none", boxShadow: "0 4px 20px -5px #0070ba60" }}>
+              Pay $10 with PayPal →
+            </a>
+            <p style={{ margin: "12px 0 0", fontSize: 11, color: "#44445a", textAlign: "center" }}>Secure PayPal checkout</p>
+          </>)}
+
+          {method === "crypto" && (<>
+            <h2 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#f0f0f5" }}>◈ Crypto</h2>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#7777aa", lineHeight: 1.6 }}>Send <strong style={{ color: "#f59e0b" }}>$10 in USDC or ETH equivalent</strong> to the address below on <strong style={{ color: "#c0c0dd" }}>Base network</strong>. After sending, click "I've Paid".</p>
+            <div style={{ padding: 20, borderRadius: 14, background: "#06060e", border: "1px solid #f59e0b20", marginBottom: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.15em", color: "#f59e0b", textTransform: "uppercase", fontFamily: "var(--mono)", marginBottom: 10 }}>Wallet Address (Base Network)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <code style={{ flex: 1, padding: "10px 14px", borderRadius: 8, background: "#0a0a16", border: "1px solid #1a1a3a", color: "#c0c0dd", fontSize: 11, fontFamily: "var(--mono)", wordBreak: "break-all" }}>{PAYMENT_CONFIG.crypto.address}</code>
+                <button onClick={() => copyText(PAYMENT_CONFIG.crypto.address)} style={{ padding: "10px 16px", borderRadius: 8, background: copied ? "#22c55e20" : "#ffffff08", border: `1px solid ${copied ? "#22c55e40" : "#ffffff15"}`, color: copied ? "#22c55e" : "#8888aa", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0, transition: "all 0.2s" }}>
+                  {copied ? "✓ Copied" : "Copy"}
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+                <div style={{ fontSize: 12, color: "#55556a" }}>Network: <span style={{ color: "#7777aa" }}>{PAYMENT_CONFIG.crypto.network}</span></div>
+                <div style={{ fontSize: 12, color: "#55556a" }}>Tokens: <span style={{ color: "#f59e0b", fontWeight: 600 }}>{PAYMENT_CONFIG.crypto.tokens}</span></div>
+              </div>
+            </div>
+            <div style={{ padding: 12, borderRadius: 10, background: "#ef444408", border: "1px solid #ef444418", marginBottom: 16 }}>
+              <p style={{ margin: 0, fontSize: 11, color: "#ef4444aa", lineHeight: 1.6 }}>⚠ Only send on <strong>Base network</strong>. Funds sent on other networks may be lost.</p>
+            </div>
+            <button onClick={handlePaymentDone} style={{ width: "100%", padding: "14px 24px", borderRadius: 10, border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "#fff" }}>
+              I've Paid ✓
+            </button>
+            <p style={{ margin: "12px 0 0", fontSize: 11, color: "#44445a", textAlign: "center" }}>We'll verify on-chain and deliver within 30 minutes.</p>
+          </>)}
+        </>)}
+
+        {/* ──── STEP 4: Confirmation ──── */}
+        {step === "confirm" && (
+          <div style={{ textAlign: "center", padding: "16px 0" }}>
+            <div style={{ width: 60, height: 60, borderRadius: "50%", margin: "0 auto 18px", background: "#22c55e12", border: "2px solid #22c55e40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, color: "#22c55e" }}>✓</div>
+            <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 700, color: "#22c55e" }}>Order Received</h2>
+            <p style={{ margin: "0 0 6px", fontSize: 14, color: "#c0c0dd" }}>Thank you, {name}!</p>
+            <p style={{ margin: "0 0 22px", fontSize: 13, color: "#7777aa", lineHeight: 1.6 }}>We'll verify your payment and deliver the QuickScan report for <strong style={{ color: "#c0c0dd", fontFamily: "var(--mono)", fontSize: 12 }}>{contractAddr.slice(0,10)}...</strong> to <strong style={{ color: "#c0c0dd" }}>{email}</strong>.</p>
+            <div style={{ padding: 16, borderRadius: 12, background: "#06060e", border: "1px solid #12122a", marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 12 }}>
+                <span style={{ color: "#55556a" }}>Payment method</span>
+                <span style={{ color: "#8888aa", fontWeight: 600 }}>{methods.find(m => m.id === method)?.name}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                <span style={{ color: "#55556a" }}>Estimated delivery</span>
+                <span style={{ color: "#22c55e", fontWeight: 600 }}>Within 30 minutes</span>
+              </div>
+            </div>
+            <p style={{ margin: "0 0 16px", fontSize: 12, color: "#55556a" }}>Questions? <a href={`mailto:${PAYMENT_CONFIG.email}`} style={{ color: "#6366f1", textDecoration: "none" }}>{PAYMENT_CONFIG.email}</a></p>
+            <button onClick={handleClose} style={{ padding: "12px 28px", borderRadius: 10, background: "#ffffff08", border: "1px solid #ffffff15", color: "#aaaacc", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Close</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ═══ MAIN APP ════════════════════════════════════════════════════════
 export default function App() {
   const [page, setPage] = useState("home");
   const [homeKey, setHomeKey] = useState(0);
   const [emailGate, setEmailGate] = useState({ open: false, contract: "" });
+  const [orderModal, setOrderModal] = useState(false);
   const [navSolid, setNavSolid] = useState(false);
 
   const nav = useCallback((p) => { setPage(p); if (p === "home") setHomeKey(k => k + 1); window.scrollTo(0, 0); }, []);
@@ -445,11 +692,11 @@ export default function App() {
         <button onClick={() => nav("home")} style={{ display: "flex", alignItems: "center", gap: 10, background: "none", border: "none", cursor: "pointer" }}><svg width="28" height="32" viewBox="0 0 28 32"><path d="M14 0L27.5 8V24L14 32L0.5 24V8Z" fill="none" stroke="#6366f1" strokeWidth="1.5" style={{ filter: "drop-shadow(0 0 6px #6366f140)" }} /><text x="14" y="19" textAnchor="middle" fill="#6366f1" fontSize="11" fontWeight="800" fontFamily="'JetBrains Mono',monospace">A</text></svg><span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.15em", color: "#f0f0f5", fontFamily: "var(--mono)" }}>AXIOM</span></button>
         <div className="nav-links-d" style={{ display: "flex", gap: 32, alignItems: "center" }}>
           {[["reports","Reports"],["methodology","Methodology"],["about","About"]].map(([id,lb]) => <button key={id} onClick={() => nav(id)} style={{ background: "none", border: "none", cursor: "pointer", padding: "8px 0", color: page===id?"#f0f0f5":"#7777aa", fontSize: 13, fontWeight: 500, borderBottom: page===id?"2px solid #6366f1":"2px solid transparent" }}>{lb}</button>)}
-          <button onClick={() => nav("home")} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", border: "none", cursor: "pointer" }}>Request Scan</button>
+          <button onClick={() => setOrderModal(true)} style={{ padding: "8px 20px", borderRadius: 8, fontSize: 13, fontWeight: 600, background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", border: "none", cursor: "pointer" }}>Request Scan</button>
         </div>
       </nav>
 
-      {page === "home" && <HomePage key={homeKey} nav={nav} openReport={openReport} />}
+      {page === "home" && <HomePage key={homeKey} nav={nav} openReport={openReport} openOrder={() => setOrderModal(true)} />}
       {page === "reports" && <ReportsPage openReport={openReport} />}
       {page === "methodology" && <MethodologyPage />}
       {page === "about" && <AboutPage />}
@@ -461,6 +708,7 @@ export default function App() {
       </footer>
 
       <EmailGate isOpen={emailGate.open} onClose={() => setEmailGate({ open: false, contract: "" })} contractName={emailGate.contract} />
+      <OrderModal isOpen={orderModal} onClose={() => setOrderModal(false)} />
       <AttributionPopup />
     </div>
   );
