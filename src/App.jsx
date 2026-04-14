@@ -36,7 +36,7 @@ const PAYMENT_CONFIG = {
   currency: "USD",
   email: "financial@kairovftechenology.site",
  paypal: "https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=kairo_2011@hotmail.com&amount=10&currency_code=USD&item_name=AXIOM+QuickScan",
-  pix: { key: "kairo_2011@hotmail.com", name: "Kairo V.F.", type: "Email" }, // TODO: Kairo preencher
+  pix: { key: "kairo_2011@hotmail.com", name: "kairo victor ferreita camargo ", type: "kairo_2011@hotmail.com" }, // TODO: Kairo preencher
   crypto: { address: "0xc9831d657146Da635798678C05dB729595F3392E   ", network: "Base (Ethereum L2)", tokens: "USDC / ETH" }, // TODO: Kairo preencher
   stripe: "https://buy.stripe.com/test_3cI14m5gV1ss7qoemu7EQ00", // TODO: Kairo preencher (criar em stripe.com/payment-links)
 };
@@ -701,10 +701,41 @@ export default function App() {
       {page === "methodology" && <MethodologyPage />}
       {page === "about" && <AboutPage />}
 
-      <footer style={{ padding: 40, borderTop: "1px solid #ffffff06", textAlign: "center" }}>
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginBottom: 16 }}><svg width="20" height="22" viewBox="0 0 28 32"><path d="M14 0L27.5 8V24L14 32L0.5 24V8Z" fill="none" stroke="#333355" strokeWidth="1.5" /><text x="14" y="19" textAnchor="middle" fill="#333355" fontSize="11" fontWeight="800" fontFamily="'JetBrains Mono',monospace">A</text></svg><span style={{ fontSize: 13, fontWeight: 600, color: "#333355", fontFamily: "var(--mono)", letterSpacing: "0.15em" }}>AXIOM</span></div>
-        <p style={{ fontSize: 11, color: "#333350", marginBottom: 8 }}>Risk Intelligence & Pre-Audit Screening · Base Chain · 2026</p>
-        <div style={{ display: "flex", gap: 20, justifyContent: "center" }}>{[["reports","Reports"],["methodology","Methodology"],["about","About"]].map(([id,lb]) => <button key={id} onClick={() => nav(id)} style={{ background: "none", border: "none", fontSize: 11, color: "#44445a", cursor: "pointer" }}>{lb}</button>)}</div>
+      {/* ─── Footer with Contact ─────────────────────────────────── */}
+      <footer style={{ padding: "60px 40px 40px", marginTop: 40, borderTop: "1px solid #ffffff06" }}>
+        <div style={{ maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginBottom: 20 }}>
+            <svg width="20" height="22" viewBox="0 0 28 32"><path d="M14 0L27.5 8V24L14 32L0.5 24V8Z" fill="none" stroke="#333355" strokeWidth="1.5" /><text x="14" y="19" textAnchor="middle" fill="#333355" fontSize="11" fontWeight="800" fontFamily="'JetBrains Mono',monospace">A</text></svg>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#333355", fontFamily: "var(--mono)", letterSpacing: "0.15em" }}>AXIOM</span>
+          </div>
+
+          <a href="mailto:axiom.security.base@gmail.com" style={{ display: "inline-block", fontSize: 13, color: "#7777aa", textDecoration: "none", fontFamily: "var(--mono)", letterSpacing: "0.02em", marginBottom: 20, transition: "color 0.2s" }}
+            onMouseEnter={(e) => e.currentTarget.style.color = "#a5a5ee"}
+            onMouseLeave={(e) => e.currentTarget.style.color = "#7777aa"}>
+            axiom.security.base@gmail.com
+          </a>
+
+          <div style={{ display: "flex", gap: 16, justifyContent: "center", marginBottom: 24 }}>
+            {[
+              { label: "X", href: "https://x.com/AXIOM28S", icon: "𝕏" },
+              { label: "YouTube", href: "https://youtube.com/@axiom28-o8w", icon: "▶" },
+              { label: "Discord", href: "https://discord.com/users/axiom04569", icon: "◈" },
+              { label: "Telegram", href: "https://t.me/axiom281198", icon: "◆" },
+            ].map((s) => (
+              <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" title={s.label} style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid #12122a", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 14, color: "#44445a", transition: "all 0.2s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#6366f130"; e.currentTarget.style.color = "#8888aa"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#12122a"; e.currentTarget.style.color = "#44445a"; }}>
+                {s.icon}
+              </a>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: 20, justifyContent: "center", marginBottom: 16 }}>
+            {[["reports","Reports"],["methodology","Methodology"],["about","About"]].map(([id,lb]) => <button key={id} onClick={() => nav(id)} style={{ background: "none", border: "none", fontSize: 11, color: "#44445a", cursor: "pointer" }}>{lb}</button>)}
+          </div>
+
+          <p style={{ fontSize: 10, color: "#2a2a40" }}>Risk Intelligence & Pre-Audit Screening · Base Chain · 2026</p>
+        </div>
       </footer>
 
       <EmailGate isOpen={emailGate.open} onClose={() => setEmailGate({ open: false, contract: "" })} contractName={emailGate.contract} />
